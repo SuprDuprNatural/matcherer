@@ -103,7 +103,6 @@ def __match_levels(
         reference_match_rms,
     )
 
-
 def __match_frequencies(
     target_mid: np.ndarray,
     target_side: np.ndarray,
@@ -112,10 +111,11 @@ def __match_frequencies(
     target_side_loudest_pieces: np.ndarray,
     reference_side_loudest_pieces: np.ndarray,
     config: Config,
-) -> (np.ndarray, np.ndarray):
-    debug_line()
-    info(Code.INFO_MATCHING_FREQS)
-
+) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    """
+    Modified version that returns the mid_fir and side_fir arrays
+    so we can store them for later usage.
+    """
     mid_fir = get_fir(
         target_mid_loudest_pieces, reference_mid_loudest_pieces, "mid", config
     )
@@ -123,17 +123,18 @@ def __match_frequencies(
         target_side_loudest_pieces, reference_side_loudest_pieces, "side", config
     )
 
-    del (
-        target_mid_loudest_pieces,
-        reference_mid_loudest_pieces,
-        target_side_loudest_pieces,
-        reference_side_loudest_pieces,
-    )
+
+#     del (
+#         target_mid_loudest_pieces,
+#         reference_mid_loudest_pieces,
+#         target_side_loudest_pieces,
+#         reference_side_loudest_pieces,
+#     )
 
     result, result_mid = convolve(target_mid, mid_fir, target_side, side_fir)
 
-    return result, result_mid
-
+    # return the usual result plus the FIRs
+    return result, result_mid, mid_fir, side_fir
 
 def __correct_levels(
     result: np.ndarray,
@@ -206,7 +207,6 @@ def __finalize(
 
     return result, result_no_limiter, result_no_limiter_normalized
 
-
 def main(
     target: np.ndarray,
     reference: np.ndarray,
@@ -214,7 +214,7 @@ def main(
     need_default: bool = True,
     need_no_limiter: bool = False,
     need_no_limiter_normalized: bool = False,
-) -> (np.ndarray, np.ndarray, np.ndarray):
+) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     (
         target_mid,
         target_side,
@@ -230,7 +230,8 @@ def main(
 
     del target, reference
 
-    result_no_limiter, result_no_limiter_mid = __match_frequencies(
+    # 1) Now we capture 4 items from __match_frequencies
+    result_no_limiter, result_no_limiter_mid, mid_fir, side_fir = __match_frequencies(
         target_mid,
         target_side,
         target_mid_loudest_pieces,
@@ -249,6 +250,7 @@ def main(
         reference_side_loudest_pieces,
     )
 
+    # 2) Correct levels
     result_no_limiter = __correct_levels(
         result_no_limiter,
         result_no_limiter_mid,
@@ -257,9 +259,9 @@ def main(
         reference_match_rms,
         config,
     )
-
     del result_no_limiter_mid
 
+    # 3) Finalize
     result, result_no_limiter, result_no_limiter_normalized = __finalize(
         result_no_limiter,
         final_amplitude_coefficient,
@@ -269,4 +271,5 @@ def main(
         config,
     )
 
-    return result, result_no_limiter, result_no_limiter_normalized
+    # 4) Return 5 items, with the new mid_fir & side_fir
+    return result, result_no_limiter, result_no_limiter_normalized, mid_fir, side_fir

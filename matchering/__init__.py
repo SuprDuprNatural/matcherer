@@ -34,3 +34,4 @@ from .defaults import Config
 from .core import process
 from .loader import load
 from .checker import check
+from .core import analyze, apply_analysis
